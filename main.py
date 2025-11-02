@@ -3,7 +3,7 @@
 format_setup.py — one-shot formatter enforcer for Python repos.
 
 Usage:
-  python format_setup.py [--project-root .] [--python 3.11] [--ruff-only] [--dry-run]
+  python format_setup.py [--project-root .] [--python 3.11] [--ruff-only] [--dry-run] [--no-format] [--no-install-hooks]
 
 What it does:
   - Ensures pyproject.toml has Ruff config (and Black unless --ruff-only)
@@ -11,6 +11,8 @@ What it does:
   - Writes .editorconfig (LF, final newline, 4-space indent)
   - Creates/updates .github/workflows/ci.yml with format/lint checks using '.'
   - Adds ruff + pre-commit (+ black) to requirements-dev.txt
+  - Formats existing Python files with ruff (unless --no-format)
+  - Installs pre-commit hooks (unless --no-install-hooks)
   - Idempotent: merges or appends only when missing; never clobbers existing content
 """
 
@@ -18,6 +20,8 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 RUFf_REV = "v0.6.9"
@@ -268,12 +272,117 @@ def ensure_requirements_dev(root: Path, ruff_only: bool, dry: bool):
     return upsert_file(p, content, dry)
 
 
+def format_code(root: Path, ruff_only: bool, dry: bool) -> bool:
+    """Format existing Python files with ruff (and optionally black)."""
+    if dry:
+        print("Would format code with ruff...")
+        return True
+
+    try:
+        # Check if ruff is available
+        result = subprocess.run(["ruff", "--version"], capture_output=True, text=True, cwd=root)
+        if result.returncode != 0:
+            print("Warning: ruff not found. Install with: pip install ruff")
+            return False
+    except FileNotFoundError:
+        print("Warning: ruff not found. Install with: pip install ruff")
+        return False
+
+    formatted = False
+
+    # Format with ruff
+    print("Formatting code with ruff...")
+    result = subprocess.run(["ruff", "format", "."], capture_output=True, text=True, cwd=root)
+    if result.returncode == 0:
+        if result.stdout.strip():
+            print(result.stdout.strip())
+            formatted = True
+    else:
+        print(f"Warning: ruff format failed: {result.stderr}", file=sys.stderr)
+
+    # Fix linting issues with ruff
+    print("Fixing linting issues with ruff...")
+    result = subprocess.run(
+        ["ruff", "check", "--fix", "."], capture_output=True, text=True, cwd=root
+    )
+    # Ruff returns exit code 1 when it fixes issues (expected), 0 when clean, 2 on error
+    if result.returncode in (0, 1):
+        if result.stdout.strip():
+            print(result.stdout.strip())
+        formatted = True
+    else:
+        # Exit code 2 indicates an actual error
+        print(f"Warning: ruff check had errors: {result.stderr}", file=sys.stderr)
+
+    # Optionally format with black
+    if not ruff_only:
+        try:
+            result = subprocess.run(
+                ["black", "--version"], capture_output=True, text=True, cwd=root
+            )
+            if result.returncode == 0:
+                print("Formatting code with black...")
+                result = subprocess.run(["black", "."], capture_output=True, text=True, cwd=root)
+                if result.returncode == 0:
+                    if result.stdout.strip():
+                        print(result.stdout.strip())
+                        formatted = True
+        except FileNotFoundError:
+            print("Warning: black not found. Skipping black formatting.")
+
+    return formatted
+
+
+def install_precommit_hooks(root: Path, dry: bool) -> bool:
+    """Install pre-commit hooks."""
+    if dry:
+        print("Would install pre-commit hooks...")
+        return True
+
+    try:
+        # Check if pre-commit is available
+        result = subprocess.run(
+            ["pre-commit", "--version"], capture_output=True, text=True, cwd=root
+        )
+        if result.returncode != 0:
+            print("Warning: pre-commit not found. Install with: pip install pre-commit")
+            return False
+    except FileNotFoundError:
+        print("Warning: pre-commit not found. Install with: pip install pre-commit")
+        return False
+
+    # Check if .pre-commit-config.yaml exists
+    config = root / ".pre-commit-config.yaml"
+    if not config.exists():
+        print("Warning: .pre-commit-config.yaml not found. Skipping hook installation.")
+        return False
+
+    print("Installing pre-commit hooks...")
+    result = subprocess.run(["pre-commit", "install"], capture_output=True, text=True, cwd=root)
+    if result.returncode == 0:
+        print("Pre-commit hooks installed successfully.")
+        return True
+    else:
+        print(f"Warning: pre-commit install failed: {result.stderr}", file=sys.stderr)
+        return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--project-root", default=".")
     ap.add_argument("--python", default="3.11", help="Python version for CI/tools (e.g., 3.11)")
     ap.add_argument("--ruff-only", action="store_true", help="Skip Black; use Ruff formatter only")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--no-format",
+        action="store_true",
+        help="Skip formatting existing code files",
+    )
+    ap.add_argument(
+        "--no-install-hooks",
+        action="store_true",
+        help="Skip installing pre-commit hooks",
+    )
     args = ap.parse_args()
 
     root = Path(args.project_root).resolve()
@@ -292,13 +401,24 @@ def main():
         print("Updated:", ", ".join(created_or_changed))
     else:
         print("No changes; everything already in place.")
-    if not args.dry_run:
-        print("\nNext steps:")
+
+    # Format existing code (unless --no-format)
+    if not args.no_format and not args.dry_run:
+        format_code(root, args.ruff_only, args.dry_run)
+
+    # Install pre-commit hooks (unless --no-install-hooks)
+    if not args.no_install_hooks and not args.dry_run:
+        install_precommit_hooks(root, args.dry_run)
+
+    if args.dry_run:
+        print("\nNext steps (run without --dry-run to execute):")
         print("  pip install -r requirements-dev.txt || pip install ruff pre-commit black")
-        print("  pre-commit install")
-        print("  ruff format . && ruff check --fix .")
-        if not args.ruff_only:
-            print("  black .")
+        if not args.no_install_hooks:
+            print("  pre-commit install")
+        if not args.no_format:
+            print("  ruff format . && ruff check --fix .")
+            if not args.ruff_only:
+                print("  black .")
         print("  git add -A && git commit -m 'style: enforce Ruff/Black formatting'")
 
 
