@@ -3,9 +3,10 @@
 format_setup.py — one-shot formatter enforcer for Python repos.
 
 Usage:
-  python format_setup.py [--project-root .] [--python 3.11] [--ruff-only] [--dry-run] [--no-format] [--no-install-hooks]
+  python format_setup.py [--project-root .] [--python 3.11] [--ruff-only] [--dry-run] [--no-format] [--no-install-hooks] [--no-venv]
 
 What it does:
+  - Creates .venv and installs ruff + pre-commit (+ black) if needed (unless --no-venv)
   - Ensures pyproject.toml has Ruff config (and Black unless --ruff-only)
   - Writes .pre-commit-config.yaml (Ruff fix + Ruff formatter; Black optional)
   - Writes .editorconfig (LF, final newline, 4-space indent)
@@ -22,6 +23,7 @@ import argparse
 import re
 import subprocess
 import sys
+import venv
 from pathlib import Path
 
 RUFf_REV = "v0.6.9"
@@ -272,15 +274,79 @@ def ensure_requirements_dev(root: Path, ruff_only: bool, dry: bool):
     return upsert_file(p, content, dry)
 
 
-def format_code(root: Path, ruff_only: bool, dry: bool) -> bool:
+def ensure_venv_and_deps(root: Path, ruff_only: bool, dry: bool) -> Path | None:
+    """Create .venv if needed and install dependencies. Returns path to venv's Python or None."""
+    venv_path = root / ".venv"
+    venv_python = venv_path / "bin" / "python"
+    if sys.platform == "win32":
+        venv_python = venv_path / "Scripts" / "python.exe"
+
+    if venv_path.exists():
+        print("Using existing .venv")
+        return venv_python
+
+    if dry:
+        print("Would create .venv and install dependencies...")
+        return venv_python
+
+    print("Creating .venv...")
+    try:
+        builder = venv.EnvBuilder(with_pip=True)
+        builder.create(venv_path)
+    except Exception as e:
+        print(f"Warning: Failed to create .venv: {e}", file=sys.stderr)
+        return None
+
+    if not venv_python.exists():
+        print(f"Warning: .venv created but Python not found at {venv_python}", file=sys.stderr)
+        return None
+
+    print("Installing dependencies into .venv...")
+    deps = ["ruff>=0.6.9", "pre-commit>=3.0.0"]
+    if not ruff_only:
+        deps.append("black>=24.10.0")
+
+    # Install dependencies
+    result = subprocess.run(
+        [str(venv_python), "-m", "pip", "install", "--quiet"] + deps,
+        capture_output=True,
+        text=True,
+        cwd=root,
+    )
+    if result.returncode != 0:
+        print(f"Warning: Failed to install dependencies: {result.stderr}", file=sys.stderr)
+        return None
+
+    print(f"Installed: {', '.join(deps)}")
+    return venv_python
+
+
+def get_tool_command(root: Path, venv_python: Path | None, tool: str) -> list[str]:
+    """Get command to run a tool, using venv if available, otherwise system PATH."""
+    if venv_python:
+        # Use venv's tool
+        if sys.platform == "win32":
+            tool_path = venv_python.parent / f"{tool}.exe"
+        else:
+            tool_path = venv_python.parent / tool
+        if tool_path.exists():
+            return [str(tool_path)]
+        # Fallback to python -m
+        return [str(venv_python), "-m", tool]
+    # Use system PATH
+    return [tool]
+
+
+def format_code(root: Path, ruff_only: bool, dry: bool, venv_python: Path | None = None) -> bool:
     """Format existing Python files with ruff (and optionally black)."""
     if dry:
         print("Would format code with ruff...")
         return True
 
+    # Try to use ruff
+    ruff_cmd = get_tool_command(root, venv_python, "ruff")
     try:
-        # Check if ruff is available
-        result = subprocess.run(["ruff", "--version"], capture_output=True, text=True, cwd=root)
+        result = subprocess.run([*ruff_cmd, "--version"], capture_output=True, text=True, cwd=root)
         if result.returncode != 0:
             print("Warning: ruff not found. Install with: pip install ruff")
             return False
@@ -292,7 +358,7 @@ def format_code(root: Path, ruff_only: bool, dry: bool) -> bool:
 
     # Format with ruff
     print("Formatting code with ruff...")
-    result = subprocess.run(["ruff", "format", "."], capture_output=True, text=True, cwd=root)
+    result = subprocess.run([*ruff_cmd, "format", "."], capture_output=True, text=True, cwd=root)
     if result.returncode == 0:
         if result.stdout.strip():
             print(result.stdout.strip())
@@ -303,7 +369,7 @@ def format_code(root: Path, ruff_only: bool, dry: bool) -> bool:
     # Fix linting issues with ruff
     print("Fixing linting issues with ruff...")
     result = subprocess.run(
-        ["ruff", "check", "--fix", "."], capture_output=True, text=True, cwd=root
+        [*ruff_cmd, "check", "--fix", "."], capture_output=True, text=True, cwd=root
     )
     # Ruff returns exit code 1 when it fixes issues (expected), 0 when clean, 2 on error
     if result.returncode in (0, 1):
@@ -316,13 +382,14 @@ def format_code(root: Path, ruff_only: bool, dry: bool) -> bool:
 
     # Optionally format with black
     if not ruff_only:
+        black_cmd = get_tool_command(root, venv_python, "black")
         try:
             result = subprocess.run(
-                ["black", "--version"], capture_output=True, text=True, cwd=root
+                [*black_cmd, "--version"], capture_output=True, text=True, cwd=root
             )
             if result.returncode == 0:
                 print("Formatting code with black...")
-                result = subprocess.run(["black", "."], capture_output=True, text=True, cwd=root)
+                result = subprocess.run([*black_cmd, "."], capture_output=True, text=True, cwd=root)
                 if result.returncode == 0:
                     if result.stdout.strip():
                         print(result.stdout.strip())
@@ -333,16 +400,17 @@ def format_code(root: Path, ruff_only: bool, dry: bool) -> bool:
     return formatted
 
 
-def install_precommit_hooks(root: Path, dry: bool) -> bool:
+def install_precommit_hooks(root: Path, dry: bool, venv_python: Path | None = None) -> bool:
     """Install pre-commit hooks."""
     if dry:
         print("Would install pre-commit hooks...")
         return True
 
+    # Check if pre-commit is available
+    precommit_cmd = get_tool_command(root, venv_python, "pre-commit")
     try:
-        # Check if pre-commit is available
         result = subprocess.run(
-            ["pre-commit", "--version"], capture_output=True, text=True, cwd=root
+            [*precommit_cmd, "--version"], capture_output=True, text=True, cwd=root
         )
         if result.returncode != 0:
             print("Warning: pre-commit not found. Install with: pip install pre-commit")
@@ -358,7 +426,7 @@ def install_precommit_hooks(root: Path, dry: bool) -> bool:
         return False
 
     print("Installing pre-commit hooks...")
-    result = subprocess.run(["pre-commit", "install"], capture_output=True, text=True, cwd=root)
+    result = subprocess.run([*precommit_cmd, "install"], capture_output=True, text=True, cwd=root)
     if result.returncode == 0:
         print("Pre-commit hooks installed successfully.")
         return True
@@ -383,9 +451,19 @@ def main():
         action="store_true",
         help="Skip installing pre-commit hooks",
     )
+    ap.add_argument(
+        "--no-venv",
+        action="store_true",
+        help="Skip creating .venv; use system tools instead",
+    )
     args = ap.parse_args()
 
     root = Path(args.project_root).resolve()
+
+    # Create venv and install dependencies (unless --no-venv)
+    venv_python = None
+    if not args.no_venv and not args.dry_run:
+        venv_python = ensure_venv_and_deps(root, args.ruff_only, args.dry_run)
 
     actions = []
     actions.append(("editorconfig", ensure_editorconfig(root, args.dry_run)))
@@ -404,11 +482,11 @@ def main():
 
     # Format existing code (unless --no-format)
     if not args.no_format and not args.dry_run:
-        format_code(root, args.ruff_only, args.dry_run)
+        format_code(root, args.ruff_only, args.dry_run, venv_python)
 
     # Install pre-commit hooks (unless --no-install-hooks)
     if not args.no_install_hooks and not args.dry_run:
-        install_precommit_hooks(root, args.dry_run)
+        install_precommit_hooks(root, args.dry_run, venv_python)
 
     if args.dry_run:
         print("\nNext steps (run without --dry-run to execute):")
