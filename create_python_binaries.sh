@@ -4,7 +4,7 @@
 # Usage: ./create_python_binaries.sh
 
 NAME="crow"
-MODULE="main"
+MODULE="crow.main"
 FUNCTION="main"
 TARGET_DIR="build"
 
@@ -16,7 +16,7 @@ mkdir -p "${TARGET_DIR}/linux-amd64"
 cat > "${TARGET_DIR}/macos-arm64/${NAME}" << 'EOFWRAPPER'
 #!/usr/bin/env python3
 import sys
-from main import main
+from crow.main import main
 if __name__ == "__main__":
     sys.exit(main())
 EOFWRAPPER
@@ -24,7 +24,7 @@ EOFWRAPPER
 cat > "${TARGET_DIR}/macos-amd64/${NAME}" << 'EOFWRAPPER'
 #!/usr/bin/env python3
 import sys
-from main import main
+from crow.main import main
 if __name__ == "__main__":
     sys.exit(main())
 EOFWRAPPER
@@ -32,7 +32,7 @@ EOFWRAPPER
 cat > "${TARGET_DIR}/linux-amd64/${NAME}" << 'EOFWRAPPER'
 #!/usr/bin/env python3
 import sys
-from main import main
+from crow.main import main
 if __name__ == "__main__":
     sys.exit(main())
 EOFWRAPPER
