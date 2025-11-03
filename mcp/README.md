@@ -1,21 +1,21 @@
-# Crow MCP Server
+# Karasu MCP Server
 
-Model Context Protocol (MCP) server that exposes Crow CLI commands as tools for use in Cursor and other MCP-compatible IDEs.
+Model Context Protocol (MCP) server that exposes Karasu CLI commands as tools for use in Cursor and other MCP-compatible IDEs.
 
 ## Overview
 
-This MCP server allows you to use Crow directly within Cursor, making Python project formatting setup accessible to AI agents and automation. The server exposes two main tools:
+This MCP server allows you to use Karasu directly within Cursor, making Python project formatting setup accessible to AI agents and automation. The server exposes two main tools:
 
-- **crow_setup** - Setup formatting and linting for a Python repository
-- **crow_initialize** - Initialize a new Python project with formatting setup
+- **karasu_setup** - Setup formatting and linting for a Python repository
+- **karasu_initialize** - Initialize a new Python project with formatting setup
 
 ## Installation
 
 ### Prerequisites
 
 - Node.js 18+ 
-- Crow installed (Homebrew: `brew install crow` or `pip install crow`)
-- Crow must be in your PATH
+- Karasu installed (Homebrew: `brew install karasu` or `pip install karasu`)
+- Karasu must be in your PATH
 
 ### Setup
 
@@ -34,7 +34,7 @@ npm run build
 
 ## Cursor Configuration
 
-Add Crow MCP server to your Cursor configuration:
+Add Karasu MCP server to your Cursor configuration:
 
 ### macOS/Linux
 
@@ -43,9 +43,9 @@ Edit or create `~/.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "crow": {
+    "karasu": {
       "command": "node",
-      "args": ["/absolute/path/to/Crow/mcp/dist/server.js"]
+      "args": ["/absolute/path/to/Karasu/mcp/dist/server.js"]
     }
   }
 }
@@ -58,9 +58,9 @@ Edit or create `%USERPROFILE%\.cursor\mcp.json`:
 ```json
 {
   "mcpServers": {
-    "crow": {
+    "karasu": {
       "command": "node",
-      "args": ["C:\\full\\path\\to\\Crow\\mcp\\dist\\server.js"]
+      "args": ["C:\\full\\path\\to\\Karasu\\mcp\\dist\\server.js"]
     }
   }
 }
@@ -71,14 +71,14 @@ Edit or create `%USERPROFILE%\.cursor\mcp.json`:
 After configuring and restarting Cursor:
 
 1. Open Cursor's tools panel
-2. You should see `crow_setup` and `crow_initialize` available
+2. You should see `karasu_setup` and `karasu_initialize` available
 3. Use them in chat or agent mode to automate Python project setup
 
 ### Example Agent Workflow
 
 ```
-1. crow_initialize(name="mytool", description="My awesome tool", python="3.12")
-2. crow_setup(projectRoot="./myproject", ruffOnly=true, noVenv=true)
+1. karasu_initialize(name="mytool", description="My awesome tool", python="3.12")
+2. karasu_setup(projectRoot="./myproject", ruffOnly=true, noVenv=true)
 ```
 
 ## Development
@@ -103,7 +103,7 @@ You can test the server manually using the MCP inspector or by connecting from C
 
 ## Tool Reference
 
-### crow_setup
+### karasu_setup
 
 Setup formatting and linting for a Python repository.
 
@@ -117,7 +117,7 @@ Setup formatting and linting for a Python repository.
 - `noVenv` (boolean, optional) - Skip creating .venv; use system tools instead
 - `cwd` (string, optional) - Working directory (default: current)
 
-### crow_initialize
+### karasu_initialize
 
 Initialize a new Python project with formatting setup.
 
@@ -136,12 +136,12 @@ Initialize a new Python project with formatting setup.
 
 ## Troubleshooting
 
-### "crow: command not found"
+### "karasu: command not found"
 
-Ensure Crow is installed and in your PATH:
-- Homebrew: `brew install crow`
-- pip: `pip install crow`
-- Check: `which crow`
+Ensure Karasu is installed and in your PATH:
+- Homebrew: `brew install karasu`
+- pip: `pip install karasu`
+- Check: `which karasu`
 
 ### MCP Server Not Appearing
 
@@ -152,5 +152,5 @@ Ensure Crow is installed and in your PATH:
 
 ## License
 
-MIT (same as Crow)
+MIT (same as Karasu)
 

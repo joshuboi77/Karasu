@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Crow MCP Server
+ * Karasu MCP Server
  * 
- * Model Context Protocol server that exposes Crow CLI commands as tools
+ * Model Context Protocol server that exposes Karasu CLI commands as tools
  * for use in Cursor and other MCP-compatible IDEs.
  */
 
@@ -25,7 +25,7 @@ const __dirname = path.dirname(__filename);
 
 const server = new Server(
   {
-    name: "crow-mcp",
+    name: "karasu-mcp",
     version: "0.1.0",
   },
   {
@@ -121,14 +121,14 @@ function resolveCommand(cmd: string): string {
 }
 
 /**
- * Run Crow command and return result
+ * Run Karasu command and return result
  */
-function runCrow(
+function runKarasu(
   args: string[],
   cwd?: string
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const cmdPath = resolveCommand("crow");
+    const cmdPath = resolveCommand("karasu");
     const workingDir = cwd || detectProjectRoot();
     const childProcess = spawn(cmdPath, args, {
       cwd: workingDir,
@@ -160,13 +160,13 @@ function runCrow(
         resolve({
           code: 1,
           stdout: "",
-          stderr: `crow command not found. Install with: brew install crow\nOr ensure crow is on your PATH.\nOriginal error: ${error.message}`,
+          stderr: `karasu command not found. Install with: brew install karasu\nOr ensure karasu is on your PATH.\nOriginal error: ${error.message}`,
         });
       } else {
         resolve({
           code: 1,
           stdout: "",
-          stderr: `Failed to spawn crow: ${error.message}`,
+          stderr: `Failed to spawn karasu: ${error.message}`,
         });
       }
     });
@@ -269,12 +269,12 @@ const InitializeSchema = z.object({
 
 // Register all tools
 registerTool(
-  "crow_setup",
+  "karasu_setup",
   "Set up Ruff/Black formatting, pre-commit hooks, and CI for any Python project (libraries, web apps, CLI tools, scripts, etc.). Works on existing projects. Safe to run multiple times - only adds missing configuration.",
   SetupSchema,
   (input) => {
     const args: string[] = [];
-    // Only pass --project-root if explicitly provided (let Crow default otherwise)
+    // Only pass --project-root if explicitly provided (let Karasu default otherwise)
     if (input.projectRoot) args.push("--project-root", input.projectRoot);
     if (input.python) args.push("--python", input.python);
     if (input.ruffOnly) args.push("--ruff-only");
@@ -287,7 +287,7 @@ registerTool(
 );
 
 registerTool(
-  "crow_initialize",
+  "karasu_initialize",
   "Create a new Python CLI tool from scratch: generates main.py template with argparse, sets up formatting/CI, and creates command-line entry points. Use this when starting a brand new CLI tool project.",
   InitializeSchema,
   (input) => {
@@ -295,7 +295,7 @@ registerTool(
     if (input.name) args.push("--name", input.name);
     if (input.description) args.push("--description", input.description);
     if (input.version) args.push("--version", input.version);
-    // Only pass --project-root if explicitly provided (let Crow default otherwise)
+    // Only pass --project-root if explicitly provided (let Karasu default otherwise)
     if (input.projectRoot) args.push("--project-root", input.projectRoot);
     if (input.python) args.push("--python", input.python);
     if (input.ruffOnly) args.push("--ruff-only");
@@ -390,12 +390,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Validate input with Zod schema
     const validatedInput = tool.schema.parse(args || {});
     
-    // Convert to Crow CLI args
-    const crowArgs = tool.toArgs(validatedInput);
+    // Convert to Karasu CLI args
+    const karasuArgs = tool.toArgs(validatedInput);
     const cwd = validatedInput.cwd;
 
-    // Execute Crow command
-    const result = await runCrow(crowArgs, cwd);
+    // Execute Karasu command
+    const result = await runKarasu(karasuArgs, cwd);
 
     if (result.code !== 0) {
       return {
@@ -435,7 +435,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Crow MCP server running on stdio");
+  console.error("Karasu MCP server running on stdio");
 }
 
 main().catch((error) => {

@@ -1,4 +1,4 @@
-# Crow | A Smart Ruff Black Bird [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+# Karasu | A Smart Ruff Black Bird [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 > One-shot formatter enforcer for Python repos. Sets up Ruff, Black, pre-commit hooks, CI workflows, and more—all in a single command.
 
@@ -36,26 +36,26 @@
 ### Via Homebrew (Recommended)
 
 ```bash
-brew tap joshuboi77/crow
-brew install crow
+brew tap joshuboi77/karasu
+brew install karasu
 ```
 
 ### Via pip
 
 ```bash
-pip install crow
+pip install karasu
 ```
 
 Or with a specific version:
 ```bash
-pip install crow>=0.1.0
+pip install karasu>=0.1.0
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/joshuboi77/Crow.git
-cd Crow
+git clone https://github.com/joshuboi77/Karasu.git
+cd Karasu
 pip install -e .
 ```
 
@@ -63,10 +63,10 @@ pip install -e .
 
 ### For Existing Projects
 
-Run Crow in your Python project directory:
+Run Karasu in your Python project directory:
 
 ```bash
-crow
+karasu
 ```
 
 This will:
@@ -82,7 +82,7 @@ This will:
 Initialize a new Python CLI project:
 
 ```bash
-crow --initialize
+karasu --initialize
 ```
 
 This will:
@@ -93,7 +93,7 @@ This will:
 
 **Non-interactive mode:**
 ```bash
-crow --initialize --name mytool --description "My awesome CLI tool" --version 0.1.0
+karasu --initialize --name mytool --description "My awesome CLI tool" --version 0.1.0
 ```
 
 ## Usage
@@ -102,16 +102,16 @@ crow --initialize --name mytool --description "My awesome CLI tool" --version 0.
 
 ```bash
 # Run in current directory
-crow
+karasu
 
 # Specify project root
-crow --project-root /path/to/project
+karasu --project-root /path/to/project
 
 # Use Ruff only (no Black)
-crow --ruff-only
+karasu --ruff-only
 
 # Dry run (see what would change)
-crow --dry-run
+karasu --dry-run
 ```
 
 ### Options
@@ -135,30 +135,30 @@ crow --dry-run
 **Set up formatting for an existing project:**
 ```bash
 cd my-python-project
-crow
+karasu
 ```
 
 **Initialize a new CLI tool:**
 ```bash
 mkdir my-tool && cd my-tool
 git init
-crow --initialize
+karasu --initialize
 # Prompts for name, description, version
 ```
 
 **Set up with Python 3.12:**
 ```bash
-crow --python 3.12
+karasu --python 3.12
 ```
 
 **Ruff-only setup (faster, simpler):**
 ```bash
-crow --ruff-only
+karasu --ruff-only
 ```
 
 **Non-interactive initialization:**
 ```bash
-crow --initialize \
+karasu --initialize \
   --name mytool \
   --description "My awesome CLI tool" \
   --version 0.2.0
@@ -166,7 +166,7 @@ crow --initialize \
 
 ## What Gets Created
 
-Crow creates/updates the following files:
+Karasu creates/updates the following files:
 
 ### Configuration Files
 
@@ -187,7 +187,7 @@ Crow creates/updates the following files:
 
 ## Integration with Feza
 
-Crow creates Feza-compatible entry points:
+Karasu creates Feza-compatible entry points:
 
 ```toml
 [project.scripts]
@@ -201,8 +201,8 @@ This allows Feza to:
 
 **Complete workflow:**
 ```bash
-# 1. Initialize project with Crow
-crow --initialize --name mytool
+# 1. Initialize project with Karasu
+karasu --initialize --name mytool
 
 # 2. Develop your tool...
 
@@ -217,7 +217,7 @@ feza tap --name mytool --formula Mytool v1.0.0
 
 ### Ruff Configuration
 
-Crow sets up Ruff with:
+Karasu sets up Ruff with:
 - Line length: 100
 - Target Python: 3.11 (configurable with `--python`)
 - Lint rules: E, F, I, N, W, UP
@@ -241,14 +241,14 @@ Runs on push/PR to `main`, `master`, or `develop`:
 
 ### "ruff not found"
 
-Crow automatically creates `.venv` and installs dependencies. If this fails:
+Karasu automatically creates `.venv` and installs dependencies. If this fails:
 - Ensure Python 3.11+ is available
 - Check that `pip` is working
 - Use `--no-venv` if you prefer system tools
 
 ### "working tree is dirty"
 
-Crow checks for uncommitted changes before running (in some contexts). Commit or stash changes first:
+Karasu checks for uncommitted changes before running (in some contexts). Commit or stash changes first:
 ```bash
 git add -A && git commit -m "Your changes"
 # or
@@ -262,7 +262,7 @@ Ensure hooks are installed:
 pre-commit install
 ```
 
-Or let Crow do it automatically (default behavior).
+Or let Karasu do it automatically (default behavior).
 
 ## Requirements
 
@@ -276,13 +276,13 @@ Optional:
 
 ## Idempotency
 
-Crow is designed to be idempotent:
+Karasu is designed to be idempotent:
 - Won't overwrite existing configuration
 - Only adds missing pieces
 - Safe to run multiple times
 - Merges new sections into existing files
 
-You can run `crow` multiple times on the same project without fear of breaking existing configurations.
+You can run `karasu` multiple times on the same project without fear of breaking existing configurations.
 
 ## Contributing
 
@@ -293,7 +293,7 @@ Contributions are welcome! Here's how you can help:
 3. **Submit PRs**: Fork, make changes, and open a pull request
 
 Please ensure:
-- Code follows the project's style (run `crow` on your changes!)
+- Code follows the project's style (run `karasu` on your changes!)
 - Tests pass (if applicable)
 - Documentation is updated
 
