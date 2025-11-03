@@ -14,10 +14,11 @@ import {
   ErrorCode,
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { z } from "zod";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,56 @@ const server = new Server(
 );
 
 /**
+ * Detect project root directory by looking for git root or project indicators.
+ * Falls back to current working directory if nothing found.
+ */
+function detectProjectRoot(): string {
+  const startDir = process.cwd();
+  
+  // Try 1: Git root (most reliable for projects in git repos)
+  try {
+    const gitRoot = execSync("git rev-parse --show-toplevel", {
+      cwd: startDir,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (gitRoot && existsSync(gitRoot)) {
+      return gitRoot;
+    }
+  } catch {
+    // Git command failed, continue to next method
+  }
+  
+  // Try 2: Walk up directory tree looking for project indicators
+  let currentDir = path.resolve(startDir);
+  const root = path.parse(currentDir).root;
+  
+  while (currentDir !== root) {
+    // Check for common project files
+    const indicators = [
+      "pyproject.toml",
+      "package.json",
+      "Cargo.toml",
+      "go.mod",
+      ".git",
+      "Makefile",
+    ];
+    
+    for (const indicator of indicators) {
+      if (existsSync(path.join(currentDir, indicator))) {
+        return currentDir;
+      }
+    }
+    
+    // Move up one directory
+    currentDir = path.dirname(currentDir);
+  }
+  
+  // Fallback: return current working directory
+  return startDir;
+}
+
+/**
  * Run Crow command and return result
  */
 function runCrow(
@@ -43,7 +94,7 @@ function runCrow(
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const cmd = "crow";
-    const workingDir = cwd || process.cwd();
+    const workingDir = cwd || detectProjectRoot();
     const childProcess = spawn(cmd, args, {
       cwd: workingDir,
       env: process.env,
@@ -129,7 +180,7 @@ const SetupSchema = z.object({
     .boolean()
     .optional()
     .describe("Skip creating .venv; use system tools instead"),
-  cwd: z.string().optional().describe("Working directory (default: current)"),
+  cwd: z.string().optional().describe("Working directory (default: auto-detect project root)"),
 });
 
 const InitializeSchema = z.object({
@@ -170,16 +221,17 @@ const InitializeSchema = z.object({
     .boolean()
     .optional()
     .describe("Skip creating .venv; use system tools instead"),
-  cwd: z.string().optional().describe("Working directory (default: current)"),
+  cwd: z.string().optional().describe("Working directory (default: auto-detect project root)"),
 });
 
 // Register all tools
 registerTool(
   "crow_setup",
-  "Setup formatting and linting for a Python repository",
+  "Set up Ruff/Black formatting, pre-commit hooks, and CI for an existing Python project. Safe to run multiple times.",
   SetupSchema,
   (input) => {
     const args: string[] = [];
+    // Only pass --project-root if explicitly provided (let Crow default otherwise)
     if (input.projectRoot) args.push("--project-root", input.projectRoot);
     if (input.python) args.push("--python", input.python);
     if (input.ruffOnly) args.push("--ruff-only");
@@ -193,13 +245,14 @@ registerTool(
 
 registerTool(
   "crow_initialize",
-  "Initialize a new Python project with formatting setup",
+  "Bootstrap a new Python CLI project with template code, formatting setup, and Feza-compatible entry points.",
   InitializeSchema,
   (input) => {
     const args: string[] = ["--initialize"];
     if (input.name) args.push("--name", input.name);
     if (input.description) args.push("--description", input.description);
     if (input.version) args.push("--version", input.version);
+    // Only pass --project-root if explicitly provided (let Crow default otherwise)
     if (input.projectRoot) args.push("--project-root", input.projectRoot);
     if (input.python) args.push("--python", input.python);
     if (input.ruffOnly) args.push("--ruff-only");
