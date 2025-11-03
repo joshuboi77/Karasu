@@ -2,6 +2,14 @@
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "crow"
+version = "0.1.0"
+description = "One-shot formatter enforcer for Python repos"
+requires-python = ">=3.11"
+
+[project.scripts]
+crow = "main:main"
 
 [tool.ruff]
 line-length = 100
