@@ -4,6 +4,7 @@ format_setup.py — one-shot formatter enforcer for Python repos.
 
 Usage:
   python format_setup.py [--project-root .] [--python 3.11] [--ruff-only] [--dry-run] [--no-format] [--no-install-hooks] [--no-venv]
+  python format_setup.py --initialize [--name NAME] [--description DESC] [--version VER]
 
 What it does:
   - Creates .venv and installs ruff + pre-commit (+ black) if needed (unless --no-venv)
@@ -14,6 +15,7 @@ What it does:
   - Adds ruff + pre-commit (+ black) to requirements-dev.txt
   - Formats existing Python files with ruff (unless --no-format)
   - Installs pre-commit hooks (unless --no-install-hooks)
+  - With --initialize: creates main.py template and sets up [project] section in pyproject.toml
   - Idempotent: merges or appends only when missing; never clobbers existing content
 """
 
@@ -152,6 +154,37 @@ BLACK_CHECK_STEP = """    - name: Format check with Black (backup)
 
 REQ_DEV_HEADER = "# Development dependencies\n"
 
+MAIN_PY_TEMPLATE = """#!/usr/bin/env python3
+\"\"\"
+{description}
+
+Usage:
+  {name} [options]
+
+\"\"\"
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+
+def main() -> int:
+    \"\"\"Main entry point.\"\"\"
+    ap = argparse.ArgumentParser(description="{description}")
+    # Add your arguments here
+
+    args = ap.parse_args()
+
+    # Your code here
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+"""
+
 
 def upsert_file(path: Path, content: str, dry: bool) -> bool:
     if path.exists():
@@ -191,11 +224,143 @@ def ensure_precommit(root: Path, ruff_only: bool, dry: bool):
     return upsert_file(p, content, dry)
 
 
-def ensure_pyproject(root: Path, ruff_only: bool, pyver: str, dry: bool):
+def infer_name_from_directory(root: Path) -> str:
+    """Infer tool name from directory name."""
+    return root.name.lower().replace(" ", "-").replace("_", "-")
+
+
+def validate_name(name: str) -> str:
+    """Validate and normalize tool name."""
+    # Remove invalid characters, replace spaces/underscores with hyphens
+    normalized = re.sub(r"[^a-z0-9-]", "", name.lower().replace("_", "-").replace(" ", "-"))
+    # Remove consecutive hyphens
+    normalized = re.sub(r"-+", "-", normalized)
+    # Remove leading/trailing hyphens
+    normalized = normalized.strip("-")
+    return normalized or "my-tool"
+
+
+def validate_version(version: str) -> str:
+    """Validate version format (basic semver check)."""
+    if re.match(r"^\d+\.\d+\.\d+", version):
+        return version
+    # If invalid, warn but don't fail
+    return version
+
+
+def initialize_project(
+    root: Path, name: str | None, description: str | None, version: str | None, dry: bool
+) -> tuple[str, str, str]:
+    """Initialize new Python project. Returns (name, description, version)."""
+    main_py = root / "main.py"
+    main_py_was_created = False
+
+    # Create main.py if missing
+    if not main_py.exists() and not dry:
+        print(f"Creating {main_py.name}...")
+        # Use placeholders initially, will update after getting real values
+        main_py.write_text(MAIN_PY_TEMPLATE.format(name="my-tool", description="CLI tool"))
+        main_py_was_created = True
+    elif not main_py.exists() and dry:
+        print(f"Would create {main_py.name}")
+
+    # Interactive prompts if values not provided
+    if not name:
+        default_name = infer_name_from_directory(root)
+        try:
+            user_input = input(f"What is your tool's name? [{default_name}]: ").strip()
+            name = user_input or default_name
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+            sys.exit(1)
+    name = validate_name(name)
+
+    if not description:
+        try:
+            user_input = input("What is your tool's description? [CLI tool]: ").strip()
+            description = user_input or "CLI tool"
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+            sys.exit(1)
+
+    if not version:
+        try:
+            user_input = input("Initial version? [0.1.0]: ").strip()
+            version = user_input or "0.1.0"
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+            sys.exit(1)
+    version = validate_version(version)
+
+    # Update main.py template if it was just created or has placeholders
+    if main_py.exists() and not dry and (main_py_was_created or "my-tool" in main_py.read_text()):
+        content = MAIN_PY_TEMPLATE.format(name=name, description=description)
+        main_py.write_text(content)
+        if main_py_was_created:
+            print(f"Updated {main_py.name} with tool name and description")
+
+    return name, description, version
+
+
+def ensure_pyproject(
+    root: Path,
+    ruff_only: bool,
+    pyver: str,
+    dry: bool,
+    project_name: str | None = None,
+    project_description: str | None = None,
+    project_version: str | None = None,
+) -> bool:
+    """Ensure pyproject.toml exists with all necessary sections."""
     p = root / "pyproject.toml"
     if p.exists():
         txt = p.read_text()
         changed = False
+
+        # Add [project] section if missing and we have project info
+        if project_name and "[project]" not in txt:
+            project_block = f"""[project]
+name = "{project_name}"
+version = "{project_version or "0.1.0"}"
+description = "{project_description or "CLI tool"}"
+requires-python = ">={pyver}"
+
+[project.scripts]
+{project_name} = "main:main"
+
+"""
+            # Insert after [build-system] if it exists, otherwise at the start
+            if "[build-system]" in txt:
+                txt = txt.replace("[build-system]", "[build-system]\n\n" + project_block, 1)
+            else:
+                txt = project_block + txt
+            changed = True
+        elif project_name and "[project.scripts]" not in txt:
+            # Add entry point if [project] exists but no scripts
+            scripts_block = f"""
+[project.scripts]
+{project_name} = "main:main"
+"""
+            # Find [project] section and add scripts after it
+            if "[project]" in txt:
+                # Insert before next [section] or at end
+                lines = txt.split("\n")
+                insert_idx = len(lines)
+                in_project = False
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("[project"):
+                        in_project = True
+                    elif (
+                        in_project
+                        and line.strip().startswith("[")
+                        and not line.startswith("[project")
+                    ):
+                        insert_idx = i
+                        break
+                lines.insert(insert_idx, scripts_block)
+                txt = "\n".join(lines)
+                changed = True
+
         # inject Ruff block if missing
         if "[tool.ruff]" not in txt:
             txt = (
@@ -215,10 +380,24 @@ def ensure_pyproject(root: Path, ruff_only: bool, pyver: str, dry: bool):
         if changed and not dry:
             p.write_text(txt)
         return changed
-    # create minimal + ruff (+ black)
+    # create new pyproject.toml
+    project_block = ""
+    if project_name:
+        project_block = f"""[project]
+name = "{project_name}"
+version = "{project_version or "0.1.0"}"
+description = "{project_description or "CLI tool"}"
+requires-python = ">={pyver}"
+
+[project.scripts]
+{project_name} = "main:main"
+
+"""
+
     body = (
         MINIMAL_PYPROJECT_BUILD
         + "\n\n"
+        + project_block
         + PYPROJECT_RUFF_BLOCK.replace('"py311"', f'"py{pyver.replace(".", "")}"')
     )
     if not ruff_only:
@@ -456,9 +635,40 @@ def main():
         action="store_true",
         help="Skip creating .venv; use system tools instead",
     )
+    ap.add_argument(
+        "--initialize",
+        "--init",
+        "-i",
+        action="store_true",
+        help="Initialize a new Python project (creates main.py and sets up pyproject.toml with [project] section)",
+    )
+    ap.add_argument(
+        "--name",
+        help="Tool name (for --initialize, non-interactive mode)",
+    )
+    ap.add_argument(
+        "--description",
+        help="Tool description (for --initialize, non-interactive mode)",
+    )
+    ap.add_argument(
+        "--version",
+        help="Initial version (for --initialize, non-interactive mode, default: 0.1.0)",
+    )
     args = ap.parse_args()
 
     root = Path(args.project_root).resolve()
+
+    # Handle initialization mode
+    project_name = None
+    project_description = None
+    project_version = None
+    if args.initialize:
+        project_name, project_description, project_version = initialize_project(
+            root, args.name, args.description, args.version, args.dry_run
+        )
+        if not args.dry_run:
+            print(f"\nInitializing project: {project_name} v{project_version}")
+            print(f"Description: {project_description}")
 
     # Create venv and install dependencies (unless --no-venv)
     venv_python = None
@@ -468,7 +678,20 @@ def main():
     actions = []
     actions.append(("editorconfig", ensure_editorconfig(root, args.dry_run)))
     actions.append(("pre-commit", ensure_precommit(root, args.ruff_only, args.dry_run)))
-    actions.append(("pyproject", ensure_pyproject(root, args.ruff_only, args.python, args.dry_run)))
+    actions.append(
+        (
+            "pyproject",
+            ensure_pyproject(
+                root,
+                args.ruff_only,
+                args.python,
+                args.dry_run,
+                project_name,
+                project_description,
+                project_version,
+            ),
+        )
+    )
     actions.append(("ci", ensure_ci(root, args.ruff_only, args.python, args.dry_run)))
     actions.append(
         ("requirements-dev", ensure_requirements_dev(root, args.ruff_only, args.dry_run))
