@@ -24,7 +24,7 @@
 - **Auto-formatting**: Formats existing code automatically
 - **Virtual environment**: Automatically creates `.venv` and installs dependencies
 - **Project initialization**: Bootstrap new Python CLI projects with `--initialize`
-- **Feza-compatible**: Creates proper `pyproject.toml` entry points for release tooling
+- **Feza-compatible**: Creates proper `pyproject.toml` entry points for [Feza](https://github.com/joshuboi77/Feza) release tooling
 
 ## Installation
 
@@ -63,9 +63,21 @@ pip install -e .
 
 Karasu includes an MCP (Model Context Protocol) server for use in Cursor and other MCP-compatible IDEs. This allows you to use Karasu directly within your IDE via AI agents.
 
+**How it works:**
+The MCP server is a Node.js bridge that runs inside Cursor and calls the installed `karasu` executable. When you use `karasu_setup` or `karasu_initialize` tools in Cursor, the MCP server:
+1. Validates and converts parameters to CLI arguments
+2. Finds the `karasu` command in your PATH
+3. Executes the command with those arguments
+4. Returns the results back to Cursor
+
+**Important:** Both components are required:
+- **Karasu executable** - Must be installed and in your PATH (via Homebrew, pip, etc.)
+- **MCP server** - Node.js server that provides the bridge to Cursor
+
 **Prerequisites:**
 - Node.js 18+ installed
-- Karasu installed (see above)
+- Karasu installed and in PATH (see [Installation](#installation) above)
+  - Verify with: `which karasu` (macOS/Linux) or `where karasu` (Windows)
 
 **Setup:**
 
@@ -122,10 +134,11 @@ karasu --initialize
 ```
 
 This will:
-1. Create a `main.py` template
-2. Prompt for tool name, description, and version
-3. Set up complete `pyproject.toml` with entry point (Feza-compatible)
-4. Configure all formatting infrastructure
+1. Detect existing package structure (if any) or create flat structure
+2. Create a `main.py` template (placed in package directory if package exists, otherwise at root)
+3. Prompt for tool name, description, and version
+4. Set up complete `pyproject.toml` with package-aware entry point (Feza-compatible)
+5. Configure all formatting infrastructure
 
 **Non-interactive mode:**
 ```bash
@@ -215,24 +228,33 @@ Karasu creates/updates the following files:
 ### With `--initialize`
 
 - **`main.py`** - CLI tool template with argparse
-- **`pyproject.toml`** - Includes `[project]` section with entry point for Feza compatibility
+  - Placed in package directory if package structure detected (e.g., `{package}/main.py`)
+  - Placed at project root if flat structure
+- **`pyproject.toml`** - Includes `[project]` section with package-aware entry point for Feza compatibility
 
 ### Virtual Environment
 
 - **`.venv/`** - Created automatically with Ruff, pre-commit (and Black if not `--ruff-only`)
 
-## Integration with Feza
+## Integration with [Feza](https://github.com/joshuboi77/Feza)
 
-Karasu creates Feza-compatible entry points:
+Karasu creates Feza-compatible entry points that work with both package and flat project structures:
 
+**Package structure** (when a package directory exists):
+```toml
+[project.scripts]
+your-tool = "{package}.main:main"
+```
+
+**Flat structure** (when no package directory):
 ```toml
 [project.scripts]
 your-tool = "main:main"
 ```
 
-This allows Karasu to:
+Karasu automatically detects your project structure and creates the appropriate entry point format. This allows [Feza](https://github.com/joshuboi77/Feza) to:
 - Auto-detect Python projects
-- Generate `create_python_binaries.sh`
+- Generate `create_python_binaries.sh` with correct imports
 - Build and release your tool
 
 **Complete workflow:**
@@ -299,6 +321,27 @@ pre-commit install
 ```
 
 Or let Karasu do it automatically (default behavior).
+
+### MCP Server: "karasu command not found"
+
+If you see this error when using Karasu tools in Cursor:
+
+1. **Verify Karasu is installed:**
+   ```bash
+   which karasu  # macOS/Linux
+   where karasu  # Windows
+   ```
+
+2. **Ensure Karasu is in PATH:**
+   - Homebrew: `brew install karasu` (should automatically add to PATH)
+   - pip: May need to add Python Scripts directory to PATH
+   - Verify: `karasu --help` should work in terminal
+
+3. **Restart Cursor** after installing Karasu to ensure PATH is updated
+
+4. **Check MCP server logs** in Cursor for detailed error messages
+
+The MCP server requires the `karasu` executable to be installed and accessible in your PATH. The MCP server itself is just a bridge that calls the executable.
 
 ## Requirements
 
