@@ -89,20 +89,22 @@ function detectProjectRoot(): string {
  * Resolve command path, checking PATH and common Homebrew locations
  */
 function resolveCommand(cmd: string): string {
-  // Try PATH first
+  // Try PATH first - use 'which' on Unix, 'where' on Windows
+  const whichCmd = process.platform === "win32" ? "where" : "which";
   try {
-    const whichResult = execSync(`which ${cmd}`, {
+    const result = execSync(`${whichCmd} ${cmd}`, {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
+    });
+    const whichResult = result.trim().split("\n")[0]; // Take first result if multiple
     if (whichResult && existsSync(whichResult)) {
       return whichResult;
     }
   } catch {
-    // which failed, continue to Homebrew checks
+    // which/where failed, continue to Homebrew checks
   }
 
-  // Try common Homebrew locations
+  // Try common Homebrew locations (mainly for macOS/Linux)
   const homebrewPaths = [
     "/opt/homebrew/bin", // Apple Silicon
     "/usr/local/bin",    // Intel Mac / Linux with Homebrew
@@ -134,6 +136,7 @@ function runKarasu(
       cwd: workingDir,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
+      shell: true,  // Required for Windows command execution
     });
 
     let stdout = "";
@@ -160,7 +163,7 @@ function runKarasu(
         resolve({
           code: 1,
           stdout: "",
-          stderr: `karasu command not found. Install with: brew install karasu\nOr ensure karasu is on your PATH.\nOriginal error: ${error.message}`,
+          stderr: `karasu command not found. Install with: brew install karasu\nOr pip install karasu\nOr ensure karasu is on your PATH.\nOriginal error: ${error.message}`,
         });
       } else {
         resolve({
@@ -392,7 +395,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     // Convert to Karasu CLI args
     const karasuArgs = tool.toArgs(validatedInput);
-    const cwd = validatedInput.cwd;
+    const cwd = validatedInput.cwd || validatedInput.projectRoot;
 
     // Execute Karasu command
     const result = await runKarasu(karasuArgs, cwd);
