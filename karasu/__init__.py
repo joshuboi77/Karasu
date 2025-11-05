@@ -512,16 +512,22 @@ def ensure_ci(root: Path, ruff_only: bool, pyver: str, dry: bool):
                 + CI_TEMPLATE.format(PYVER=pyver, BLACK_DEP=black_dep, BLACK_STEP=black_step)
             )
             changed = True
-        elif (not ruff_only) and "black --check" not in txt:
-            # add Black step and dependency
-            # First, add black to pip install if not present
-            if "pip install ruff" in txt and "pip install black" not in txt:
+        elif not ruff_only:
+            # Handle Black: add step if missing, ensure dependency is installed
+            if "black --check" not in txt:
+                # add Black step and dependency
+                # First, add black to pip install if not present
+                if "pip install ruff" in txt and "pip install black" not in txt:
+                    txt = txt.replace("pip install ruff", f"pip install ruff{BLACK_DEP_STEP}")
+                # place Black check step after Ruff steps
+                if not txt.endswith("\n"):
+                    txt += "\n"
+                txt += "\n" + BLACK_CHECK_STEP
+                changed = True
+            elif "pip install black" not in txt and "pip install ruff" in txt:
+                # Black step exists but dependency is missing - add it
                 txt = txt.replace("pip install ruff", f"pip install ruff{BLACK_DEP_STEP}")
-            # place Black check step after Ruff steps
-            if not txt.endswith("\n"):
-                txt += "\n"
-            txt += "\n" + BLACK_CHECK_STEP
-            changed = True
+                changed = True
         if changed and not dry:
             p.write_text(txt)
         return changed
