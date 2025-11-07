@@ -26,7 +26,7 @@ const __dirname = path.dirname(__filename);
 const server = new Server(
   {
     name: "karasu-mcp",
-    version: "0.3.2",
+    version: "0.3.3",
   },
   {
     capabilities: {
