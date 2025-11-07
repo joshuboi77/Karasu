@@ -313,34 +313,8 @@ def initialize_project(
     """
     Initialize new Python project. Returns (name, description, version, package_name).
 
-    package_name is the detected package name (normalized for Python) or None if flat structure.
+    package_name is the normalized package name (with underscores) for the created package structure.
     """
-    # Detect package structure
-    package_name, package_path = detect_package_structure(root)
-
-    # Determine where to place main.py
-    if package_path:
-        # Package structure: place main.py inside package
-        main_py = package_path / "main.py"
-        package_name_normalized = package_name
-    else:
-        # Flat structure: place main.py at root
-        main_py = root / "main.py"
-        package_name_normalized = None
-
-    main_py_was_created = False
-
-    # Create main.py if missing
-    if not main_py.exists() and not dry:
-        location = "package" if package_path else "root"
-        print(f"Creating {main_py.name} in {location}...")
-        # Use placeholders initially, will update after getting real values
-        main_py.write_text(MAIN_PY_TEMPLATE.format(name="my-tool", description="CLI tool"))
-        main_py_was_created = True
-    elif not main_py.exists() and dry:
-        location = f"{package_path.name}/" if package_path else ""
-        print(f"Would create {location}{main_py.name}")
-
     # Interactive prompts if values not provided
     if not name:
         default_name = infer_name_from_directory(root)
@@ -405,7 +379,7 @@ def initialize_project(
             location = f"{package_path.name}/" if package_path else ""
             print(f"Updated {location}{main_py.name} with tool name and description")
 
-    return name, description, version, package_name_normalized
+    return name, description, version, package_name
 
 
 def ensure_pyproject(
